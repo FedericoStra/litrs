@@ -25,8 +25,12 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct IntegerLit<B: Buffer> {
+    raw: B,
+    // First index of the main number part (after the base prefix).
+    start_main_part: usize,
+    // First index not part of the main number part.
+    end_main_part: usize,
     base: IntegerBase,
-    main_part: B,
     type_suffix: Option<IntegerType>,
 }
 
@@ -93,7 +97,7 @@ impl<B: Buffer> IntegerLit<B> {
         };
 
         let mut acc = N::from_small_number(0);
-        for digit in self.main_part.bytes() {
+        for digit in self.raw_main_part().bytes() {
             if digit == b'_' {
                 continue;
             }
@@ -118,7 +122,7 @@ impl<B: Buffer> IntegerLit<B> {
     /// The main part containing the digits and potentially `_`. Do not try to
     /// parse this directly as that would ignore the base!
     pub fn raw_main_part(&self) -> &str {
-        &self.main_part
+        &(*self.raw)[self.start_main_part..self.end_main_part]
     }
 
     /// The type suffix, if specified.
@@ -189,8 +193,10 @@ impl<B: Buffer> IntegerLit<B> {
         };
 
         Ok(Self {
+            raw: input,
+            start_main_part: end_prefix,
+            end_main_part: end_main + end_prefix,
             base,
-            main_part: input.cut(end_prefix..end_main + end_prefix),
             type_suffix,
         })
     }
@@ -201,8 +207,10 @@ impl IntegerLit<&str> {
     /// `Self`.
     pub fn to_owned(&self) -> IntegerLit<String> {
         IntegerLit {
+            raw: self.raw.to_owned(),
+            start_main_part: self.start_main_part,
+            end_main_part: self.end_main_part,
             base: self.base,
-            main_part: self.main_part.to_owned(),
             type_suffix: self.type_suffix,
         }
     }
@@ -225,7 +233,7 @@ impl<B: Buffer> fmt::Display for IntegerLit<B> {
             Some(IntegerType::I128) => "i128",
             Some(IntegerType::Isize) => "isize",
         };
-        write!(f, "{}{}{}", self.base.prefix(), &*self.main_part, suffix)
+        write!(f, "{}{}{}", self.base.prefix(), &*self.raw_main_part(), suffix)
     }
 }
 
